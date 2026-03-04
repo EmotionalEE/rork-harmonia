@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: ci
+    timeout-minutes: 60
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: "18"
+        cache: "npm"
+
+    - name: Cache bun and node cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.bun
+          ~/.npm
+          ~/.cache/yarn
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/bun.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - name: Make scripts executable
+      run: |
+        chmod +x scripts/*.sh || true
+
+    - name: Install dependencies (auto-detect bun / yarn / npm)
+      run: scripts/install-deps.sh
+
+    - name: Lint
+      run: |
+        if npm run -s lint; then echo "Lint OK"; else echo "Lint failed" && exit 1; fi
+
+    - name: Typecheck
+      run: npm run -s typecheck
+
+    - name: Run unit tests
+      run: npm run -s test
+
+    - name: Audio smoke tests (validate reachable audio URLs)
+      run: scripts/audio-smoke-test.sh
+
+    - name: Build web (expo)
+      run: npm run -s build:web
+
+    - name: Upload web build artifact
+      if: success() && exists('web-build')
+      uses: actions/upload-artifact@v4
+      with:
+        name: web-build
+        path: web-build
+
+    # Optional: create Sentry release (requires SENTRY_AUTH_TOKEN secret)
+    - name: Create Sentry release (optional)
+      if: startsWith(github.ref, 'refs/heads/')
+      uses: getsentry/action-release@v1
+      with:
+        environment: ci
+        # set SENTRY_AUTH_TOKEN in repository secrets
+        sentry_auth_token: ${{ secrets.SENTRY_AUTH_TOKEN }}
