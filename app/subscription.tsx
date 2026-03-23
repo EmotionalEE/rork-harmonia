@@ -203,14 +203,14 @@ export default function SubscriptionScreen() {
 
   const handleClose = useCallback(() => {
     console.log("[subscription] close");
-    void haptics("light");
+    haptics("light");
     router.back();
   }, [haptics, router]);
 
   const handlePlanSelect = useCallback(
     (planId: PlanType) => {
       console.log("[subscription] plan select", planId);
-      void haptics("light");
+      haptics("light");
       setSelectedPlan(planId);
     },
     [haptics]
@@ -219,7 +219,7 @@ export default function SubscriptionScreen() {
   const handlePaymentMethodSelect = useCallback(
     (method: PaymentMethodType) => {
       console.log("[subscription] payment method select", method);
-      void haptics("light");
+      haptics("light");
       setSelectedPaymentMethod(method);
     },
     [haptics]
@@ -267,7 +267,7 @@ export default function SubscriptionScreen() {
       setExpiryDate("");
       setCvv("");
       setCardName("");
-      void haptics("success");
+      haptics("success");
       Alert.alert("Payment Successful", `Your ${selectedPlan} subscription has been activated. This is a demo.`, [
         { text: "OK", onPress: () => router.back() },
       ]);
@@ -321,7 +321,7 @@ export default function SubscriptionScreen() {
           <View style={styles.heroBadgeRow}>
             <View style={styles.heroBadge}>
               <Sparkles size={14} color={palette.gold} strokeWidth={2.5} />
-              <Text style={styles.heroBadgeText}>Premium</Text>
+              <Text style={styles.heroBadgeText}>Rork Max</Text>
             </View>
             <View style={styles.heroBadgeMuted}>
               <Shield size={14} color={palette.textDim} strokeWidth={2.5} />
@@ -333,7 +333,7 @@ export default function SubscriptionScreen() {
             <View style={styles.crownChip}>
               <Crown size={18} color={palette.bg0} strokeWidth={2.2} fill={palette.gold} />
             </View>
-            <Text style={styles.heroTitle}>Upgrade to Premium</Text>
+            <Text style={styles.heroTitle}>Upgrade to Rork Max</Text>
           </View>
           <Text style={styles.heroSubtitle}>
             Unlock the most advanced Harmonia experience with deeper sessions, smarter insights, and faster AI guidance.
@@ -942,7 +942,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: palette.text,
     fontSize: 15,
-    fontWeight: "600" as const,
+    fontWeight: "650" as const,
     lineHeight: 20,
   },
   legalRow: {
@@ -993,7 +993,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: palette.textDim,
     fontSize: 13,
-    fontWeight: "600" as const,
+    fontWeight: "650" as const,
     lineHeight: 18,
   },
   ctaPressable: {
@@ -1088,7 +1088,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: palette.textDim,
     fontSize: 13,
-    fontWeight: "600" as const,
+    fontWeight: "650" as const,
     lineHeight: 18,
   },
   form: {
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: palette.text,
     fontSize: 16,
-    fontWeight: "600" as const,
+    fontWeight: "650" as const,
   },
   row: {
     flexDirection: "row",

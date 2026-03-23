@@ -110,7 +110,7 @@ export default function HomeScreen() {
 
   const handleEmotionSelect = useCallback(async (emotion: EmotionalState) => {
     if (Platform.OS !== "web") {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await triggerHapticPattern('gentle_pulse');
     }
     setSelectedEmotion(emotion);
@@ -119,7 +119,7 @@ export default function HomeScreen() {
 
   const handleDailyCheckInPress = useCallback(async () => {
     if (Platform.OS !== "web") {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     const todayIso = new Date().toISOString().slice(0, 10);
     router.push({
@@ -130,7 +130,7 @@ export default function HomeScreen() {
 
   const handleSessionPress = useCallback(async (session: Session) => {
     if (Platform.OS !== "web") {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await triggerHapticPattern('rhythmic_wave');
     }
 
@@ -142,7 +142,7 @@ export default function HomeScreen() {
 
   const handleOpenAIChat = useCallback(() => {
     if (Platform.OS !== "web") {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     setShowAIChatModal(true);
   }, []);
@@ -216,7 +216,7 @@ export default function HomeScreen() {
       }
     };
 
-    void init();
+    init();
 
     return () => {
       isMounted = false;
@@ -429,7 +429,7 @@ export default function HomeScreen() {
               <AnimatedPressable
                 onPress={() => {
                   if (Platform.OS !== "web") {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }
                   router.push("/subscription" as any);
                 }}
@@ -438,7 +438,7 @@ export default function HomeScreen() {
               >
                 <View style={styles.headerActionInner}>
                   <Crown size={18} color={palette.gold} strokeWidth={2.2} />
-                  <Text style={styles.headerActionText}>Premium</Text>
+                  <Text style={styles.headerActionText}>Rork Max</Text>
                 </View>
               </AnimatedPressable>
 
