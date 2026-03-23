@@ -1,860 +1,834 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
-  Animated,
-  Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
+  ScrollView,
+  TouchableOpacity,
+  Platform,
+  Animated,
+  Pressable,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect, useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
-import {
-  ArrowRight,
-  BookOpen,
-  Brain,
-  Crown,
-  MessageCircleHeart,
-  Sparkles,
-  Waves,
-} from "lucide-react-native";
-import AIChatModal from "@/components/AIChatModal";
-import { getDetoxSessionIcon, getEmotionIcon } from "@/components/EmotionIcons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter, useFocusEffect } from "expo-router";
+import { User, Crown, Sparkles, MessageCircle, Check } from "lucide-react-native";
 import { emotionalStates, sessions } from "@/constants/sessions";
 import { useUserProgress } from "@/providers/UserProgressProvider";
 import { useVibroacoustic } from "@/providers/VibroacousticProvider";
-import type { EmotionalState, Session } from "@/types/session";
+import { EmotionalState, Session } from "@/types/session";
+import { getEmotionIcon, getDetoxSessionIcon } from "@/components/EmotionIcons";
+import AIChatModal from "@/components/AIChatModal";
+import * as Haptics from "expo-haptics";
 
 const palette = {
-  ink: "#F4F1EA",
-  text: "#FFF8EF",
-  textMuted: "rgba(255, 248, 239, 0.72)",
-  textFaint: "rgba(255, 248, 239, 0.52)",
-  night: "#120F1C",
-  plum: "#20162C",
-  rose: "#A6496A",
-  ember: "#F28A54",
-  aqua: "#57D7C6",
-  line: "rgba(255, 248, 239, 0.1)",
-  card: "rgba(255, 248, 239, 0.08)",
-  glass: "rgba(18, 15, 28, 0.56)",
-  success: "#B5F1D8",
+  bg0: "#070A12",
+  bg1: "#0B1022",
+  card: "rgba(255,255,255,0.08)",
+  card2: "rgba(255,255,255,0.10)",
+  stroke: "rgba(255,255,255,0.14)",
+  strokeStrong: "rgba(255,255,255,0.22)",
+  text: "#F5F7FF",
+  textDim: "rgba(245,247,255,0.78)",
+  textFaint: "rgba(245,247,255,0.58)",
+  teal: "#1FD6C1",
+  blue: "#4AA3FF",
+  gold: "#F8C46C",
 } as const;
-
-const heroGradient = ["#1A1426", "#281A37", "#522643"] as const;
-const surfaceGradient = ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.02)"] as const;
-const primaryGradient = ["#F29A5A", "#E56672"] as const;
-const insightGradient = ["#5FD5C5", "#6E8CFF"] as const;
 
 const AnimatedPressable = React.memo(function AnimatedPressable({
   children,
   onPress,
-  style,
+  disabled,
   testID,
+  style,
 }: {
   children: React.ReactNode;
-  onPress: () => void;
-  style?: object;
+  onPress?: () => void;
+  disabled?: boolean;
   testID?: string;
+  style?: any;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
 
-  const handlePressIn = useCallback(() => {
+  const pressIn = useCallback(() => {
     Animated.spring(scale, {
-      toValue: 0.985,
-      speed: 25,
-      bounciness: 5,
+      toValue: 0.98,
       useNativeDriver: Platform.OS !== "web",
+      speed: 18,
+      bounciness: 6,
     }).start();
   }, [scale]);
 
-  const handlePressOut = useCallback(() => {
+  const pressOut = useCallback(() => {
     Animated.spring(scale, {
       toValue: 1,
-      speed: 25,
-      bounciness: 5,
       useNativeDriver: Platform.OS !== "web",
+      speed: 18,
+      bounciness: 6,
     }).start();
   }, [scale]);
 
   return (
     <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={style}
       testID={testID}
+      onPress={onPress}
+      disabled={disabled}
+      onPressIn={pressIn}
+      onPressOut={pressOut}
+      style={style}
     >
       <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>
     </Pressable>
   );
 });
 
-function formatMinutes(totalMinutes: number): string {
-  if (totalMinutes >= 60) {
-    const hours = Math.floor(totalMinutes / 60);
-    const remainder = totalMinutes % 60;
-    return remainder > 0 ? `${hours}h ${remainder}m` : `${hours}h`;
-  }
-
-  return `${totalMinutes}m`;
-}
-
-function SessionGlyph({ session }: { session: Session }) {
-  if (session.id === "741hz-detox") {
-    return <>{getDetoxSessionIcon()}</>;
-  }
-
-  return <>{getEmotionIcon(session.targetEmotions[0] ?? "", "#FFF8EF", 30)}</>;
-}
-
 export default function HomeScreen() {
   const router = useRouter();
-  const { hasCompletedOnboarding, hasSeenWelcome, progress } = useUserProgress();
+  const { hasSeenWelcome, hasCompletedOnboarding } = useUserProgress();
   const { triggerHapticPattern } = useVibroacoustic();
-  const [selectedEmotionId, setSelectedEmotionId] = useState<string | null>(null);
-  const [showAIChatModal, setShowAIChatModal] = useState<boolean>(false);
-  const fadeAnim = useMemo(() => new Animated.Value(0), []);
-  const riseAnim = useMemo(() => new Animated.Value(16), []);
-  const glowAnim = useMemo(() => new Animated.Value(0), []);
-  const orbAnim = useMemo(() => new Animated.Value(0), []);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [emotionsSectionY, setEmotionsSectionY] = useState<number>(0);
+  const [selectedEmotion, setSelectedEmotion] = useState<EmotionalState | null>(null);
+  const [targetEmotionId, setTargetEmotionId] = useState<string | null>(null);
+  const [showAIChatModal, setShowAIChatModal] = useState(false);
 
-  const availableSessions = useMemo(() => {
-    return sessions.filter((session) => session.id !== "welcome-intro");
+  const [isInitialized, setIsInitialized] = useState(false);
+  const fadeAnim = useMemo(() => new Animated.Value(0), []);
+  const scaleAnim = useMemo(() => new Animated.Value(0.95), []);
+  const iconSpin = useMemo(() => new Animated.Value(0), []);
+  const iconPulse = useMemo(() => new Animated.Value(0), []);
+  const sessionIconAnims = useMemo(() => {
+    return sessions.map(() => ({
+      rotate: new Animated.Value(0),
+      scale: new Animated.Value(1),
+    }));
   }, []);
 
-  const featuredSession = useMemo(() => {
-    if (selectedEmotionId) {
-      return availableSessions.find((session) => session.targetEmotions.includes(selectedEmotionId)) ?? availableSessions[0];
+  const handleEmotionSelect = useCallback(async (emotion: EmotionalState) => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await triggerHapticPattern('gentle_pulse');
+    }
+    setSelectedEmotion(emotion);
+    setTargetEmotionId(null);
+  }, [triggerHapticPattern]);
+
+  const handleDailyCheckInPress = useCallback(async () => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    const todayIso = new Date().toISOString().slice(0, 10);
+    router.push({
+      pathname: "/journal-entry" as any,
+      params: { date: todayIso },
+    });
+  }, [router]);
+
+  const handleSessionPress = useCallback(async (session: Session) => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await triggerHapticPattern('rhythmic_wave');
     }
 
-    return availableSessions[0];
-  }, [availableSessions, selectedEmotionId]);
+    router.push({
+      pathname: "/session" as any,
+      params: { sessionId: session.id },
+    });
+  }, [router, triggerHapticPattern]);
+
+  const handleOpenAIChat = useCallback(() => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setShowAIChatModal(true);
+  }, []);
+
+  const getSessionIcon = useCallback((session: Session) => {
+    if (session.id === '741hz-detox') {
+      return getDetoxSessionIcon();
+    }
+    const primaryEmotion = session.targetEmotions?.[0];
+    return getEmotionIcon(primaryEmotion ?? "", "#fff", 32);
+  }, []);
 
   const filteredSessions = useMemo(() => {
-    if (!selectedEmotionId) {
-      return availableSessions.slice(0, 6);
+    const availableSessions = sessions.filter((s) => s.id !== 'welcome-intro');
+    if (targetEmotionId) {
+      return availableSessions.filter((s) => s.targetEmotions.includes(targetEmotionId));
     }
-
-    return availableSessions.filter((session) => session.targetEmotions.includes(selectedEmotionId)).slice(0, 6);
-  }, [availableSessions, selectedEmotionId]);
-
-  const selectedEmotion = useMemo(() => {
-    return emotionalStates.find((emotion) => emotion.id === selectedEmotionId) ?? null;
-  }, [selectedEmotionId]);
-
-  const completionRate = useMemo(() => {
-    const totalSessions = availableSessions.length;
-    if (totalSessions === 0) {
-      return 0;
-    }
-
-    return Math.min(1, progress.completedSessions.length / totalSessions);
-  }, [availableSessions.length, progress.completedSessions.length]);
-
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
-  }, []);
+    return selectedEmotion ? availableSessions.filter((s) => s.targetEmotions.includes(selectedEmotion.id)) : availableSessions;
+  }, [selectedEmotion, targetEmotionId]);
 
   useFocusEffect(
     useCallback(() => {
-      console.log("[HomeScreen] focus", {
-        hasSeenWelcome,
-        hasCompletedOnboarding,
-      });
-
-      const timeout = setTimeout(() => {
+      const timer = setTimeout(() => {
+        setIsInitialized(true);
         if (!hasSeenWelcome) {
-          console.log("[HomeScreen] redirecting to welcome");
-          router.replace("/welcome" as never);
+          router.replace("/welcome" as any);
           return;
         }
-
         if (!hasCompletedOnboarding) {
-          console.log("[HomeScreen] redirecting to onboarding");
-          router.replace("/onboarding" as never);
+          router.replace("/onboarding" as any);
           return;
         }
 
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
-            duration: 600,
-            useNativeDriver: Platform.OS !== "web",
+            duration: 800,
+            useNativeDriver: true,
           }),
-          Animated.timing(riseAnim, {
-            toValue: 0,
-            duration: 600,
-            useNativeDriver: Platform.OS !== "web",
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            tension: 20,
+            friction: 7,
+            useNativeDriver: true,
           }),
         ]).start();
-      }, 60);
+      }, 100);
 
-      return () => clearTimeout(timeout);
-    }, [fadeAnim, hasCompletedOnboarding, hasSeenWelcome, riseAnim, router])
+      return () => clearTimeout(timer);
+    }, [hasSeenWelcome, hasCompletedOnboarding, fadeAnim, scaleAnim, router])
   );
 
   useEffect(() => {
-    const glowLoop = Animated.loop(
+    const spinLoop = Animated.loop(
+      Animated.timing(iconSpin, {
+        toValue: 1,
+        duration: 12000,
+        useNativeDriver: true,
+      })
+    );
+    const pulseLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(glowAnim, {
+        Animated.timing(iconPulse, {
           toValue: 1,
-          duration: 2600,
-          useNativeDriver: Platform.OS !== "web",
+          duration: 1600,
+          useNativeDriver: true,
         }),
-        Animated.timing(glowAnim, {
+        Animated.timing(iconPulse, {
           toValue: 0,
-          duration: 2600,
-          useNativeDriver: Platform.OS !== "web",
+          duration: 1600,
+          useNativeDriver: true,
         }),
       ])
     );
 
-    const orbLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(orbAnim, {
-          toValue: 1,
-          duration: 5000,
-          useNativeDriver: Platform.OS !== "web",
-        }),
-        Animated.timing(orbAnim, {
-          toValue: 0,
-          duration: 5000,
-          useNativeDriver: Platform.OS !== "web",
-        }),
-      ])
-    );
+    spinLoop.start();
+    pulseLoop.start();
 
-    glowLoop.start();
-    orbLoop.start();
+    const sessionAnimations = sessionIconAnims.map((anim, index) => {
+      const rotateLoop = Animated.loop(
+        Animated.timing(anim.rotate, {
+          toValue: 1,
+          duration: 8000 + (index * 500),
+          useNativeDriver: true,
+        })
+      );
+
+      const scaleLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim.scale, {
+            toValue: 1.12,
+            duration: 1200 + (index * 100),
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim.scale, {
+            toValue: 1,
+            duration: 1200 + (index * 100),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+      rotateLoop.start();
+      scaleLoop.start();
+
+      return { rotateLoop, scaleLoop };
+    });
 
     return () => {
-      glowLoop.stop();
-      orbLoop.stop();
+      iconSpin.stopAnimation();
+      iconPulse.stopAnimation();
+      sessionAnimations.forEach((anims) => {
+        anims.rotateLoop.stop();
+        anims.scaleLoop.stop();
+      });
     };
-  }, [glowAnim, orbAnim]);
+  }, [iconSpin, iconPulse, sessionIconAnims]);
 
-  const handleImpact = useCallback(async (style: Haptics.ImpactFeedbackStyle) => {
-    if (Platform.OS === "web") {
-      return;
-    }
-
-    await Haptics.impactAsync(style);
-  }, []);
-
-  const handleSelectEmotion = useCallback(
-    async (emotion: EmotionalState) => {
-      console.log("[HomeScreen] selecting emotion", emotion.id);
-      await handleImpact(Haptics.ImpactFeedbackStyle.Light);
-      await triggerHapticPattern("gentle_pulse");
-      setSelectedEmotionId((current) => (current === emotion.id ? null : emotion.id));
-    },
-    [handleImpact, triggerHapticPattern]
-  );
-
-  const handleOpenSession = useCallback(
-    async (sessionId: string) => {
-      console.log("[HomeScreen] opening session", sessionId);
-      await handleImpact(Haptics.ImpactFeedbackStyle.Medium);
-      await triggerHapticPattern("rhythmic_wave");
-      router.push({ pathname: "/session" as never, params: { sessionId } as never });
-    },
-    [handleImpact, router, triggerHapticPattern]
-  );
-
-  const handleOpenJournal = useCallback(async () => {
-    console.log("[HomeScreen] opening journal entry");
-    await handleImpact(Haptics.ImpactFeedbackStyle.Light);
-    const todayIso = new Date().toISOString().slice(0, 10);
-    router.push({ pathname: "/journal-entry" as never, params: { date: todayIso } as never });
-  }, [handleImpact, router]);
-
-  const handleOpenInsights = useCallback(async () => {
-    console.log("[HomeScreen] opening insights");
-    await handleImpact(Haptics.ImpactFeedbackStyle.Light);
-    router.push("/insights" as never);
-  }, [handleImpact, router]);
-
-  const handleOpenProfile = useCallback(async () => {
-    console.log("[HomeScreen] opening profile");
-    await handleImpact(Haptics.ImpactFeedbackStyle.Light);
-    router.push("/profile" as never);
-  }, [handleImpact, router]);
-
-  const handleOpenChat = useCallback(async () => {
-    console.log("[HomeScreen] opening AI chat");
-    await handleImpact(Haptics.ImpactFeedbackStyle.Light);
-    setShowAIChatModal(true);
-  }, [handleImpact]);
-
-  const progressWidth = completionRate * 100;
-  const glowScale = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
-  const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.16, 0.34] });
-  const orbTranslateY = orbAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -14] });
-  const orbTranslateX = orbAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 10] });
+  if (!isInitialized) {
+    return (
+      <LinearGradient colors={["#1a1a2e", "#16213e", "#0f3460"]} style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
 
   return (
-    <View style={styles.screen} testID="home-screen">
-      <LinearGradient colors={heroGradient} style={StyleSheet.absoluteFillObject} />
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.backgroundOrbLarge,
-          {
-            opacity: glowOpacity,
-            transform: [{ scale: glowScale }, { translateY: orbTranslateY }],
-          },
-        ]}
+    <View style={styles.container} testID="home.screen">
+      <LinearGradient
+        colors={[palette.bg0, palette.bg1, "#071A24"]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       />
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.backgroundOrbSmall,
-          {
-            opacity: glowOpacity,
-            transform: [{ translateX: orbTranslateX }, { translateY: orbTranslateY }],
-          },
-        ]}
-      />
+      <View style={styles.glowTopRight} pointerEvents="none" />
+      <View style={styles.glowBottomLeft} pointerEvents="none" />
 
-      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-        <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: riseAnim }] }}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.content}
-            testID="home-scroll"
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          testID="home.scroll"
+        >
+          <Animated.View
+            style={[
+              styles.header,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }],
+              },
+            ]}
+            testID="home.header"
           >
-            <View style={styles.heroCard}>
-              <View style={styles.topRow}>
-                <View>
-                  <Text style={styles.eyebrow}>{greeting}</Text>
-                  <Text style={styles.heroTitle}>{progress.name}</Text>
+            <View style={styles.heroBadgeRow}>
+              <AnimatedPressable onPress={handleDailyCheckInPress} testID="daily-check-in" style={styles.heroBadgePressable}>
+                <View style={styles.heroBadge}>
+                  <Sparkles size={14} color={palette.gold} strokeWidth={2.5} />
+                  <Text style={styles.heroBadgeText}>Daily check-in</Text>
                 </View>
-                <AnimatedPressable onPress={handleOpenProfile} testID="profile-button">
-                  <View style={styles.profilePill}>
-                    <Crown color={palette.ink} size={18} />
-                  </View>
-                </AnimatedPressable>
-              </View>
-
-              <Text style={styles.heroBody}>
-                Build your next session around how you feel right now, not around a rigid routine.
-              </Text>
-
-              <View style={styles.metricRow}>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{progress.streak}</Text>
-                  <Text style={styles.metricLabel}>day streak</Text>
-                </View>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{progress.totalSessions}</Text>
-                  <Text style={styles.metricLabel}>sessions</Text>
-                </View>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{formatMinutes(progress.totalMinutes)}</Text>
-                  <Text style={styles.metricLabel}>listened</Text>
-                </View>
-              </View>
-
-              <View style={styles.progressShell}>
-                <View style={styles.progressHeader}>
-                  <Text style={styles.progressTitle}>Library progress</Text>
-                  <Text style={styles.progressPercent}>{Math.round(progressWidth)}%</Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <LinearGradient
-                    colors={primaryGradient}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 1, y: 0.5 }}
-                    style={[styles.progressFill, { width: `${progressWidth}%` }]}
-                  />
-                </View>
-              </View>
+              </AnimatedPressable>
             </View>
 
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Pick your mood</Text>
-              <Text style={styles.sectionHint}>{selectedEmotion?.label ?? "All states"}</Text>
+            <View style={styles.heroTitleRow}>
+              <View style={styles.crownChip}>
+                <Crown size={18} color={palette.bg0} strokeWidth={2.2} fill={palette.gold} />
+              </View>
+              <Text style={styles.title}>How are you feeling?</Text>
             </View>
+            <Text style={styles.subtitle}>Pick the emotion that's most present. We'll cue sessions that match.</Text>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.emotionRow}
-              testID="emotion-scroll"
-            >
+            <View style={styles.headerActionsRow}>
+              <AnimatedPressable
+                onPress={() => {
+                  if (Platform.OS !== "web") {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                  router.push("/subscription" as any);
+                }}
+                testID="header-subscription-button"
+                style={styles.headerAction}
+              >
+                <View style={styles.headerActionInner}>
+                  <Crown size={18} color={palette.gold} strokeWidth={2.2} />
+                  <Text style={styles.headerActionText}>Premium</Text>
+                </View>
+              </AnimatedPressable>
+
+              <AnimatedPressable onPress={() => router.push("/profile" as any)} testID="header-profile-button" style={styles.headerAction}>
+                <View style={styles.headerActionInner}>
+                  <User size={18} color={palette.text} strokeWidth={2.2} />
+                  <Text style={styles.headerActionText}>Profile</Text>
+                </View>
+              </AnimatedPressable>
+            </View>
+          </Animated.View>
+
+          <View
+            style={styles.emotionsSection}
+            testID="home.emotions"
+            onLayout={(event) => setEmotionsSectionY(event.nativeEvent.layout.y)}
+          >
+            <Text style={styles.sectionTitleSmall}>Right now…</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emotionsContainer}>
               {emotionalStates.map((emotion) => {
-                const isSelected = selectedEmotionId === emotion.id;
+                const isSelected = selectedEmotion?.id === emotion.id;
                 return (
-                  <AnimatedPressable
+                  <Animated.View
                     key={emotion.id}
-                    onPress={() => void handleSelectEmotion(emotion)}
-                    testID={`emotion-${emotion.id}`}
+                    style={{
+                      opacity: fadeAnim,
+                      transform: [
+                        {
+                          translateY: fadeAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [14, 0],
+                          }),
+                        },
+                      ],
+                    }}
                   >
-                    <LinearGradient
-                      colors={emotion.gradient as [string, string]}
-                      style={[styles.emotionPill, isSelected ? styles.emotionPillSelected : null]}
-                    >
-                      <View style={styles.emotionIconWrap}>{getEmotionIcon(emotion.id, "#FFF8EF", 24)}</View>
-                      <Text style={styles.emotionLabel}>{emotion.label}</Text>
-                    </LinearGradient>
-                  </AnimatedPressable>
+                    <AnimatedPressable onPress={() => handleEmotionSelect(emotion)} testID={`emotion.${emotion.id}`}>
+                      <View style={[styles.emotionCardWrap, isSelected && styles.emotionCardWrapSelected]}>
+                        <LinearGradient
+                          colors={
+                            isSelected
+                              ? (emotion.gradient as unknown as readonly [string, string, ...string[]])
+                              : [palette.card, palette.card] as const
+                          }
+                          style={styles.emotionCard}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                        >
+                          <View style={styles.emotionTopRow}>
+                            <View style={styles.emotionIconPill}>
+                              <Animated.View
+                                style={{
+                                  transform: [
+                                    {
+                                      rotate: iconSpin.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: ["0deg", "360deg"],
+                                      }),
+                                    },
+                                    {
+                                      scale: iconPulse.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [0.96, 1.06],
+                                      }),
+                                    },
+                                  ],
+                                }}
+                                testID={`emotion.icon.${emotion.id}`}
+                              >
+                                {getEmotionIcon(
+                                  emotion.id,
+                                  isSelected ? palette.text : (emotion.gradient?.[0] ?? palette.text),
+                                  30
+                                )}
+                              </Animated.View>
+                            </View>
+
+                            <View style={[styles.selectionDot, isSelected && styles.selectionDotSelected]}>
+                              {isSelected ? <Check size={14} color={palette.bg0} strokeWidth={3} /> : null}
+                            </View>
+                          </View>
+
+                          <Text style={[styles.emotionLabel, isSelected && styles.emotionLabelSelected]}>{emotion.label}</Text>
+                          <Text style={styles.emotionHint}>tap to filter</Text>
+                        </LinearGradient>
+                      </View>
+                    </AnimatedPressable>
+                  </Animated.View>
                 );
               })}
             </ScrollView>
+          </View>
 
-            {featuredSession ? (
-              <AnimatedPressable
-                onPress={() => void handleOpenSession(featuredSession.id)}
-                testID="featured-session-card"
+          <View style={styles.sessionsSection}>
+            <Text style={styles.sectionTitle}>
+              {targetEmotionId
+                ? `Move toward ${emotionalStates.find(e => e.id === targetEmotionId)?.label ?? ''}`
+                : selectedEmotion
+                ? `Sessions for ${selectedEmotion.label}`
+                : "Recommended Sessions"}
+            </Text>
+
+            {filteredSessions.map((session, index) => (
+              <Animated.View
+                key={session.id}
+                style={{
+                  opacity: fadeAnim,
+                  transform: [
+                    {
+                      translateX: fadeAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-30, 0],
+                      }),
+                    },
+                  ],
+                }}
               >
-                <LinearGradient colors={featuredSession.gradient as [string, string]} style={styles.featuredCard}>
-                  <View style={styles.featuredTopRow}>
-                    <View style={styles.featuredBadge}>
-                      <Sparkles color={palette.ink} size={14} />
-                      <Text style={styles.featuredBadgeText}>Recommended now</Text>
-                    </View>
-                    <View style={styles.featuredGlyphWrap}>
-                      <SessionGlyph session={featuredSession} />
-                    </View>
-                  </View>
-
-                  <Text style={styles.featuredTitle}>{featuredSession.title}</Text>
-                  <Text style={styles.featuredDescription} numberOfLines={3}>
-                    {featuredSession.description.replace(/\n+/g, " ")}
-                  </Text>
-
-                  <View style={styles.featuredFooter}>
-                    <View style={styles.metaChip}>
-                      <Waves color={palette.ink} size={14} />
-                      <Text style={styles.metaChipText}>{featuredSession.frequency} Hz</Text>
-                    </View>
-                    <View style={styles.metaChip}>
-                      <Brain color={palette.ink} size={14} />
-                      <Text style={styles.metaChipText}>{featuredSession.duration} min</Text>
-                    </View>
-                    <ArrowRight color={palette.ink} size={18} />
-                  </View>
-                </LinearGradient>
-              </AnimatedPressable>
-            ) : null}
-
-            <View style={styles.quickActionRow}>
-              <AnimatedPressable onPress={handleOpenJournal} style={styles.quickActionWrap} testID="journal-button">
-                <LinearGradient colors={surfaceGradient} style={styles.quickActionCard}>
-                  <BookOpen color={palette.ink} size={18} />
-                  <Text style={styles.quickActionTitle}>Daily journal</Text>
-                  <Text style={styles.quickActionText}>Capture the emotion before or after your session.</Text>
-                </LinearGradient>
-              </AnimatedPressable>
-
-              <AnimatedPressable onPress={handleOpenChat} style={styles.quickActionWrap} testID="chat-button">
-                <LinearGradient colors={surfaceGradient} style={styles.quickActionCard}>
-                  <MessageCircleHeart color={palette.ink} size={18} />
-                  <Text style={styles.quickActionTitle}>AI companion</Text>
-                  <Text style={styles.quickActionText}>Talk through the feeling and get a softer next step.</Text>
-                </LinearGradient>
-              </AnimatedPressable>
-            </View>
-
-            <AnimatedPressable onPress={handleOpenInsights} testID="insights-card">
-              <LinearGradient colors={insightGradient} style={styles.insightCard}>
-                <View>
-                  <Text style={styles.insightEyebrow}>Reflection arc</Text>
-                  <Text style={styles.insightTitle}>See your emotional trends</Text>
-                  <Text style={styles.insightBody}>
-                    Track streaks, shifts, and the sessions that help you settle fastest.
-                  </Text>
-                </View>
-                <ArrowRight color={palette.night} size={20} />
-              </LinearGradient>
-            </AnimatedPressable>
-
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Session library</Text>
-              <Text style={styles.sectionHint}>{filteredSessions.length} curated picks</Text>
-            </View>
-
-            <View style={styles.sessionList}>
-              {filteredSessions.map((session) => (
-                <AnimatedPressable
-                  key={session.id}
-                  onPress={() => void handleOpenSession(session.id)}
-                  testID={`session-${session.id}`}
+                <TouchableOpacity
+                  onPress={() => handleSessionPress(session)}
+                  activeOpacity={0.9}
                 >
-                  <View style={styles.sessionCard}>
-                    <LinearGradient colors={session.gradient as [string, string]} style={styles.sessionGlyphBubble}>
-                      <SessionGlyph session={session} />
-                    </LinearGradient>
-                    <View style={styles.sessionCopy}>
-                      <Text style={styles.sessionTitle}>{session.title}</Text>
-                      <Text numberOfLines={2} style={styles.sessionDescription}>
-                        {session.description.replace(/\n+/g, " ")}
-                      </Text>
-                      <View style={styles.sessionMetaRow}>
-                        <Text style={styles.sessionMeta}>{session.frequency} Hz</Text>
-                        <Text style={styles.sessionMetaDot}>•</Text>
-                        <Text style={styles.sessionMeta}>{session.duration} min</Text>
+                  <LinearGradient
+                    colors={session.gradient as unknown as readonly [string, string, ...string[]]}
+                    style={styles.sessionCard}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <View style={styles.sessionContent}>
+                      <View style={styles.sessionInfo}>
+                        <Text style={styles.sessionTitle}>{session.title}</Text>
+                        <Text style={styles.sessionDescription}>
+                          {session.description}
+                        </Text>
+                        <View style={styles.sessionMeta}>
+                          <View style={styles.sessionTag}>
+                            <Text style={styles.sessionTagText}>
+                              {session.duration} min
+                            </Text>
+                          </View>
+                          <View style={styles.sessionTag}>
+                            <Text style={styles.sessionTagText}>
+                              {session.frequency}Hz
+                            </Text>
+                          </View>
+                        </View>
                       </View>
+                      <Animated.View
+                        style={[
+                          styles.sessionIcon,
+                          {
+                            transform: [
+                              {
+                                rotate: sessionIconAnims[index]?.rotate.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: ['0deg', '360deg'],
+                                }) || '0deg',
+                              },
+                              {
+                                scale: sessionIconAnims[index]?.scale || 1,
+                              },
+                            ],
+                          },
+                        ]}
+                      >
+                        {getSessionIcon(session)}
+                      </Animated.View>
                     </View>
-                    <ArrowRight color={palette.textFaint} size={18} />
-                  </View>
-                </AnimatedPressable>
-              ))}
-            </View>
-          </ScrollView>
-        </Animated.View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
+            ))}
+          </View>
+
+          <View style={styles.chatSection}>
+            <TouchableOpacity
+              testID="openAIChat"
+              onPress={handleOpenAIChat}
+              style={styles.chatCard}
+              activeOpacity={0.85}
+            >
+              <View style={styles.chatIconContainer}>
+                <Sparkles size={22} color={palette.gold} strokeWidth={2.5} />
+              </View>
+              <View style={styles.chatContent}>
+                <Text style={styles.chatTitle}>Chat about your feelings</Text>
+                <Text style={styles.chatSubtitle}>A gentle check-in, powered by AI</Text>
+              </View>
+              <MessageCircle size={20} color={palette.textFaint} strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </SafeAreaView>
 
-      <AIChatModal visible={showAIChatModal} onClose={() => setShowAIChatModal(false)} />
+      <AIChatModal
+        visible={showAIChatModal}
+        onClose={() => setShowAIChatModal(false)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  container: {
     flex: 1,
-    backgroundColor: palette.night,
+    backgroundColor: palette.bg0,
+  },
+  glowTopRight: {
+    position: "absolute",
+    top: -120,
+    right: -140,
+    width: 320,
+    height: 320,
+    borderRadius: 260,
+    backgroundColor: "rgba(74,163,255,0.22)",
+    transform: [{ rotate: "18deg" }],
+  },
+  glowBottomLeft: {
+    position: "absolute",
+    bottom: -180,
+    left: -160,
+    width: 360,
+    height: 360,
+    borderRadius: 320,
+    backgroundColor: "rgba(31,214,193,0.16)",
+    transform: [{ rotate: "-10deg" }],
   },
   safeArea: {
     flex: 1,
   },
-  content: {
-    paddingHorizontal: 20,
+  scrollContent: {
+    paddingBottom: 30,
+  },
+  header: {
+    paddingHorizontal: 18,
     paddingTop: 10,
-    paddingBottom: 36,
-    gap: 18,
+    paddingBottom: 14,
   },
-  backgroundOrbLarge: {
-    position: "absolute",
-    top: -120,
-    right: -70,
-    width: 260,
-    height: 260,
-    borderRadius: 260,
-    backgroundColor: palette.rose,
+  heroBadgeRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
   },
-  backgroundOrbSmall: {
-    position: "absolute",
-    top: 180,
-    left: -50,
-    width: 170,
-    height: 170,
-    borderRadius: 170,
-    backgroundColor: palette.aqua,
+  heroBadgePressable: {
+    borderRadius: 999,
   },
-  heroCard: {
-    backgroundColor: palette.glass,
+  heroBadge: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "rgba(248,196,108,0.10)",
     borderWidth: 1,
-    borderColor: palette.line,
-    borderRadius: 30,
-    padding: 20,
-    gap: 18,
-    overflow: "hidden",
+    borderColor: "rgba(248,196,108,0.22)",
   },
-  topRow: {
+  heroBadgeText: {
+    color: palette.gold,
+    fontSize: 13,
+    fontWeight: "700" as const,
+    letterSpacing: 0.2,
+  },
+  heroTitleRow: {
+    marginTop: 14,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 10,
   },
-  eyebrow: {
-    color: palette.textFaint,
-    fontSize: 13,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
+  crownChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: "rgba(248,196,108,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  heroTitle: {
+  title: {
+    flex: 1,
     color: palette.text,
-    fontSize: 30,
-    fontWeight: "700",
-    letterSpacing: -0.8,
-    marginTop: 4,
+    fontSize: 28,
+    fontWeight: "800" as const,
+    letterSpacing: -0.2,
   },
-  heroBody: {
-    color: palette.textMuted,
+  subtitle: {
+    marginTop: 10,
+    color: palette.textDim,
     fontSize: 15,
     lineHeight: 22,
-    maxWidth: "92%",
   },
-  profilePill: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: palette.ink,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  metricRow: {
+  headerActionsRow: {
+    marginTop: 14,
     flexDirection: "row",
     gap: 10,
   },
-  metricCard: {
+  headerAction: {
     flex: 1,
-    borderRadius: 22,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    backgroundColor: palette.card,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: palette.line,
-  },
-  metricValue: {
-    color: palette.text,
-    fontSize: 19,
-    fontWeight: "700",
-  },
-  metricLabel: {
-    color: palette.textFaint,
-    fontSize: 12,
-    marginTop: 6,
-  },
-  progressShell: {
-    gap: 10,
-  },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  progressTitle: {
-    color: palette.textMuted,
-    fontSize: 13,
-  },
-  progressPercent: {
-    color: palette.success,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  progressTrack: {
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: palette.stroke,
     overflow: "hidden",
   },
-  progressFill: {
-    height: "100%",
-    borderRadius: 999,
-    minWidth: 10,
-  },
-  sectionHeader: {
+  headerActionInner: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 2,
-  },
-  sectionTitle: {
-    color: palette.text,
-    fontSize: 21,
-    fontWeight: "700",
-    letterSpacing: -0.5,
-  },
-  sectionHint: {
-    color: palette.textFaint,
-    fontSize: 13,
-  },
-  emotionRow: {
-    gap: 12,
-    paddingRight: 8,
-  },
-  emotionPill: {
-    width: 104,
-    borderRadius: 26,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    minHeight: 104,
-  },
-  emotionPillSelected: {
-    shadowColor: palette.ember,
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
-  },
-  emotionIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "rgba(18, 15, 28, 0.16)",
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
+    paddingVertical: 12,
+  },
+  headerActionText: {
+    color: palette.text,
+    fontSize: 14,
+    fontWeight: "800" as const,
+    letterSpacing: 0.2,
+  },
+  emotionsSection: {
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  sectionTitleSmall: {
+    color: palette.text,
+    fontSize: 14,
+    fontWeight: "900" as const,
+    letterSpacing: 0.2,
+    marginBottom: 12,
+  },
+  emotionsContainer: {
+    paddingRight: 18,
+    paddingBottom: 14,
+    paddingLeft: 18,
+  },
+  emotionCardWrap: {
+    width: 150,
+    marginRight: 12,
+  },
+  emotionCardWrapSelected: {
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  emotionCard: {
+    borderRadius: 18,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: palette.stroke,
+    minHeight: 112,
+  },
+  emotionTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  emotionIconPill: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selectionDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: palette.stroke,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selectionDotSelected: {
+    backgroundColor: palette.teal,
+    borderColor: "rgba(31,214,193,0.8)",
   },
   emotionLabel: {
-    color: palette.ink,
-    fontSize: 15,
-    fontWeight: "700",
-    marginTop: 20,
-  },
-  featuredCard: {
-    borderRadius: 30,
-    padding: 20,
-    gap: 16,
-  },
-  featuredTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  featuredBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(18, 15, 28, 0.18)",
-  },
-  featuredBadgeText: {
-    color: palette.ink,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  featuredGlyphWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(18, 15, 28, 0.14)",
-  },
-  featuredTitle: {
-    color: palette.ink,
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: -0.8,
-    maxWidth: "88%",
-  },
-  featuredDescription: {
-    color: "rgba(18, 15, 28, 0.82)",
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  featuredFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 6,
-  },
-  metaChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(18, 15, 28, 0.14)",
-  },
-  metaChipText: {
-    color: palette.ink,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  quickActionRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  quickActionWrap: {
-    flex: 1,
-  },
-  quickActionCard: {
-    borderRadius: 26,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: palette.line,
-    gap: 10,
-    minHeight: 132,
-  },
-  quickActionTitle: {
+    marginTop: 10,
     color: palette.text,
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "900" as const,
+    letterSpacing: -0.2,
   },
-  quickActionText: {
+  emotionLabelSelected: {
+    color: palette.text,
+  },
+  emotionHint: {
+    marginTop: 2,
     color: palette.textFaint,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  insightCard: {
-    borderRadius: 28,
-    padding: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 18,
-  },
-  insightEyebrow: {
-    color: "rgba(18, 15, 28, 0.7)",
     fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 6,
+    fontWeight: "700" as const,
   },
-  insightTitle: {
-    color: palette.night,
-    fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: -0.6,
+  sessionsSection: {
+    paddingHorizontal: 20,
+    marginTop: 10,
   },
-  insightBody: {
-    color: "rgba(18, 15, 28, 0.76)",
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 6,
-    maxWidth: "92%",
-  },
-  sessionList: {
-    gap: 12,
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "bold" as const,
+    color: "#fff",
+    marginBottom: 20,
   },
   sessionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    padding: 14,
-    borderRadius: 24,
-    backgroundColor: palette.glass,
-    borderWidth: 1,
-    borderColor: palette.line,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    minHeight: 120,
   },
-  sessionGlyphBubble: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
+  sessionContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sessionInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  sessionTitle: {
+    fontSize: 18,
+    fontWeight: "bold" as const,
+    color: "#fff",
+    marginBottom: 8,
+  },
+  sessionDescription: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  sessionMeta: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  sessionTag: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  sessionTagText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600" as const,
+  },
+  sessionIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(255,255,255,0.1)",
     alignItems: "center",
     justifyContent: "center",
   },
-  sessionCopy: {
+  loadingContainer: {
     flex: 1,
-    gap: 6,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  sessionTitle: {
-    color: palette.text,
-    fontSize: 16,
-    fontWeight: "700",
+  loadingText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600" as const,
   },
-  sessionDescription: {
-    color: palette.textFaint,
-    fontSize: 13,
-    lineHeight: 18,
+  chatSection: {
+    paddingHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 30,
   },
-  sessionMetaRow: {
+  chatCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    backgroundColor: "rgba(147,51,234,0.08)",
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(147,51,234,0.2)",
+    gap: 12,
   },
-  sessionMeta: {
-    color: palette.success,
-    fontSize: 12,
-    fontWeight: "700",
+  chatIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(147,51,234,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  sessionMetaDot: {
-    color: palette.textFaint,
-    fontSize: 12,
+  chatContent: {
+    flex: 1,
+  },
+  chatTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700" as const,
+    marginBottom: 2,
+  },
+  chatSubtitle: {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 13,
   },
 });
