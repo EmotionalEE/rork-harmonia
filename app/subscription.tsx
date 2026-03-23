@@ -203,14 +203,14 @@ export default function SubscriptionScreen() {
 
   const handleClose = useCallback(() => {
     console.log("[subscription] close");
-    haptics("light");
+    void haptics("light");
     router.back();
   }, [haptics, router]);
 
   const handlePlanSelect = useCallback(
     (planId: PlanType) => {
       console.log("[subscription] plan select", planId);
-      haptics("light");
+      void haptics("light");
       setSelectedPlan(planId);
     },
     [haptics]
@@ -219,7 +219,7 @@ export default function SubscriptionScreen() {
   const handlePaymentMethodSelect = useCallback(
     (method: PaymentMethodType) => {
       console.log("[subscription] payment method select", method);
-      haptics("light");
+      void haptics("light");
       setSelectedPaymentMethod(method);
     },
     [haptics]
@@ -267,7 +267,7 @@ export default function SubscriptionScreen() {
       setExpiryDate("");
       setCvv("");
       setCardName("");
-      haptics("success");
+      void haptics("success");
       Alert.alert("Payment Successful", `Your ${selectedPlan} subscription has been activated. This is a demo.`, [
         { text: "OK", onPress: () => router.back() },
       ]);
@@ -942,7 +942,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: palette.text,
     fontSize: 15,
-    fontWeight: "650" as const,
+    fontWeight: "600" as const,
     lineHeight: 20,
   },
   legalRow: {
@@ -993,7 +993,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: palette.textDim,
     fontSize: 13,
-    fontWeight: "650" as const,
+    fontWeight: "600" as const,
     lineHeight: 18,
   },
   ctaPressable: {
@@ -1088,7 +1088,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: palette.textDim,
     fontSize: 13,
-    fontWeight: "650" as const,
+    fontWeight: "600" as const,
     lineHeight: 18,
   },
   form: {
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: palette.text,
     fontSize: 16,
-    fontWeight: "650" as const,
+    fontWeight: "600" as const,
   },
   row: {
     flexDirection: "row",
