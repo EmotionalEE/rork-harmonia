@@ -321,7 +321,7 @@ export default function SubscriptionScreen() {
           <View style={styles.heroBadgeRow}>
             <View style={styles.heroBadge}>
               <Sparkles size={14} color={palette.gold} strokeWidth={2.5} />
-              <Text style={styles.heroBadgeText}>Rork Max</Text>
+              <Text style={styles.heroBadgeText}>Premium</Text>
             </View>
             <View style={styles.heroBadgeMuted}>
               <Shield size={14} color={palette.textDim} strokeWidth={2.5} />
@@ -333,10 +333,10 @@ export default function SubscriptionScreen() {
             <View style={styles.crownChip}>
               <Crown size={18} color={palette.bg0} strokeWidth={2.2} fill={palette.gold} />
             </View>
-            <Text style={styles.heroTitle}>Upgrade to Rork Max</Text>
+            <Text style={styles.heroTitle}>Unlock your full practice</Text>
           </View>
           <Text style={styles.heroSubtitle}>
-            Unlock the most advanced Harmonia experience with deeper sessions, smarter insights, and faster AI guidance.
+            Get deeper sessions, smarter insights, and a calmer routine — built to feel luxurious, not salesy.
           </Text>
         </View>
 

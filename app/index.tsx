@@ -11,8 +11,8 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { User, Crown, Sparkles, MessageCircle, Check, AlertTriangle, RefreshCw } from "lucide-react-native";
+import { useRouter, useFocusEffect } from "expo-router";
+import { User, Crown, Sparkles, MessageCircle, Check } from "lucide-react-native";
 import { emotionalStates, sessions } from "@/constants/sessions";
 import { useUserProgress } from "@/providers/UserProgressProvider";
 import { useVibroacoustic } from "@/providers/VibroacousticProvider";
@@ -88,19 +88,16 @@ export default function HomeScreen() {
   const { hasSeenWelcome, hasCompletedOnboarding } = useUserProgress();
   const { triggerHapticPattern } = useVibroacoustic();
   const scrollRef = useRef<ScrollView | null>(null);
+  const [emotionsSectionY, setEmotionsSectionY] = useState<number>(0);
   const [selectedEmotion, setSelectedEmotion] = useState<EmotionalState | null>(null);
   const [targetEmotionId, setTargetEmotionId] = useState<string | null>(null);
   const [showAIChatModal, setShowAIChatModal] = useState(false);
 
-  const [isInitialized, setIsInitialized] = useState<boolean>(false);
-  const [startupError, setStartupError] = useState<string | null>(null);
-  const [startupAttempt, setStartupAttempt] = useState<number>(0);
+  const [isInitialized, setIsInitialized] = useState(false);
   const fadeAnim = useMemo(() => new Animated.Value(0), []);
   const scaleAnim = useMemo(() => new Animated.Value(0.95), []);
   const iconSpin = useMemo(() => new Animated.Value(0), []);
   const iconPulse = useMemo(() => new Animated.Value(0), []);
-  const startupPulse = useMemo(() => new Animated.Value(0), []);
-  const startupOrbit = useMemo(() => new Animated.Value(0), []);
   const sessionIconAnims = useMemo(() => {
     return sessions.map(() => ({
       rotate: new Animated.Value(0),
@@ -163,36 +160,18 @@ export default function HomeScreen() {
     return selectedEmotion ? availableSessions.filter((s) => s.targetEmotions.includes(selectedEmotion.id)) : availableSessions;
   }, [selectedEmotion, targetEmotionId]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const init = async () => {
-      try {
-        console.log("[Home] Startup routing begin", { startupAttempt, hasSeenWelcome, hasCompletedOnboarding });
-        setStartupError(null);
-        setIsInitialized(false);
-
-        await new Promise<void>((resolve) => {
-          setTimeout(() => resolve(), 220);
-        });
-
-        if (!isMounted) {
-          return;
-        }
-
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setTimeout(() => {
+        setIsInitialized(true);
         if (!hasSeenWelcome) {
-          console.log("[Home] Startup route => /welcome");
           router.replace("/welcome" as any);
           return;
         }
-
         if (!hasCompletedOnboarding) {
-          console.log("[Home] Startup route => /onboarding");
           router.replace("/onboarding" as any);
           return;
         }
-
-        setIsInitialized(true);
 
         Animated.parallel([
           Animated.timing(fadeAnim, {
@@ -207,49 +186,13 @@ export default function HomeScreen() {
             useNativeDriver: true,
           }),
         ]).start();
-      } catch (error: unknown) {
-        console.error("[Home] Startup routing failed", error);
-        if (!isMounted) {
-          return;
-        }
-        setStartupError("We couldn't prepare your space right now.");
-      }
-    };
+      }, 100);
 
-    init();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [startupAttempt, hasSeenWelcome, hasCompletedOnboarding, fadeAnim, scaleAnim, router]);
+      return () => clearTimeout(timer);
+    }, [hasSeenWelcome, hasCompletedOnboarding, fadeAnim, scaleAnim, router])
+  );
 
   useEffect(() => {
-    const startupPulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(startupPulse, {
-          toValue: 1,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-        Animated.timing(startupPulse, {
-          toValue: 0,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    const startupOrbitLoop = Animated.loop(
-      Animated.timing(startupOrbit, {
-        toValue: 1,
-        duration: 2200,
-        useNativeDriver: true,
-      })
-    );
-
-    startupPulseLoop.start();
-    startupOrbitLoop.start();
-
     const spinLoop = Animated.loop(
       Animated.timing(iconSpin, {
         toValue: 1,
@@ -306,8 +249,6 @@ export default function HomeScreen() {
     });
 
     return () => {
-      startupPulse.stopAnimation();
-      startupOrbit.stopAnimation();
       iconSpin.stopAnimation();
       iconPulse.stopAnimation();
       sessionAnimations.forEach((anims) => {
@@ -315,65 +256,14 @@ export default function HomeScreen() {
         anims.scaleLoop.stop();
       });
     };
-  }, [iconSpin, iconPulse, sessionIconAnims, startupPulse, startupOrbit]);
-
-  const handleRetryStartup = useCallback(() => {
-    console.log("[Home] Startup retry pressed");
-    setStartupAttempt((prev) => prev + 1);
-  }, []);
-
-  if (startupError) {
-    return (
-      <LinearGradient colors={[palette.bg0, palette.bg1, "#071A24"]} style={styles.container}>
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.startupStateContainer} testID="startup.error">
-            <View style={styles.startupIconWrapError}>
-              <AlertTriangle size={28} color={palette.gold} strokeWidth={2.4} />
-            </View>
-            <Text style={styles.startupTitle}>Something went wrong</Text>
-            <Text style={styles.startupSubtitle}>{startupError}</Text>
-            <TouchableOpacity style={styles.retryButton} activeOpacity={0.9} onPress={handleRetryStartup} testID="startup.retry">
-              <RefreshCw size={16} color={palette.bg0} strokeWidth={2.6} />
-              <Text style={styles.retryButtonText}>Try again</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
-    );
-  }
+  }, [iconSpin, iconPulse, sessionIconAnims]);
 
   if (!isInitialized) {
     return (
-      <LinearGradient colors={[palette.bg0, palette.bg1, "#071A24"]} style={styles.container}>
+      <LinearGradient colors={["#1a1a2e", "#16213e", "#0f3460"]} style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <View style={styles.startupStateContainer} testID="startup.loading">
-            <Animated.View
-              style={[
-                styles.startupOrb,
-                {
-                  opacity: startupPulse.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.45, 0.95],
-                  }),
-                  transform: [
-                    {
-                      scale: startupPulse.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.92, 1.06],
-                      }),
-                    },
-                    {
-                      rotate: startupOrbit.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ["0deg", "360deg"],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
-            <Text style={styles.startupTitle}>Preparing your session space</Text>
-            <Text style={styles.startupSubtitle}>Just a moment while we set everything up.</Text>
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading...</Text>
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -423,7 +313,7 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.title}>How are you feeling?</Text>
             </View>
-            <Text style={styles.subtitle}>Pick the emotion that feels most present. We will cue sessions that match.</Text>
+            <Text style={styles.subtitle}>Pick the emotion that's most present. We'll cue sessions that match.</Text>
 
             <View style={styles.headerActionsRow}>
               <AnimatedPressable
@@ -438,7 +328,7 @@ export default function HomeScreen() {
               >
                 <View style={styles.headerActionInner}>
                   <Crown size={18} color={palette.gold} strokeWidth={2.2} />
-                  <Text style={styles.headerActionText}>Rork Max</Text>
+                  <Text style={styles.headerActionText}>Premium</Text>
                 </View>
               </AnimatedPressable>
 
@@ -454,6 +344,7 @@ export default function HomeScreen() {
           <View
             style={styles.emotionsSection}
             testID="home.emotions"
+            onLayout={(event) => setEmotionsSectionY(event.nativeEvent.layout.y)}
           >
             <Text style={styles.sectionTitleSmall}>Right now…</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emotionsContainer}>
@@ -894,60 +785,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  startupStateContainer: {
+  loadingContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 28,
   },
-  startupOrb: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    marginBottom: 16,
-    backgroundColor: "rgba(31,214,193,0.22)",
-    borderWidth: 1,
-    borderColor: "rgba(31,214,193,0.45)",
-  },
-  startupIconWrapError: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    marginBottom: 16,
-    backgroundColor: "rgba(248,196,108,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(248,196,108,0.4)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  startupTitle: {
-    color: palette.text,
-    fontSize: 22,
-    fontWeight: "800" as const,
-    textAlign: "center",
-  },
-  startupSubtitle: {
-    marginTop: 8,
-    color: palette.textDim,
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: "center",
-  },
-  retryButton: {
-    marginTop: 20,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    backgroundColor: palette.teal,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  retryButtonText: {
-    color: palette.bg0,
-    fontSize: 14,
-    fontWeight: "800" as const,
-    letterSpacing: 0.2,
+  loadingText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600" as const,
   },
   chatSection: {
     paddingHorizontal: 20,
