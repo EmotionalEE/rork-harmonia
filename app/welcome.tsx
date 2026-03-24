@@ -16,6 +16,12 @@ import { useRouter } from "expo-router";
 import { useUserProgress } from "@/providers/UserProgressProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { trpc } from "@/lib/trpc";
+import {
+  isFirebaseAuthConfigured,
+  normalizeFirebaseAuthError,
+  signInWithFirebaseEmail,
+  signUpWithFirebaseEmail,
+} from "@/lib/firebase";
 import { Mail, Lock, User as UserIcon, Check, Eye, EyeOff } from "lucide-react-native";
 import { harmoniaColors } from "@/constants/colors";
 import { Image } from "expo-image";
@@ -47,6 +53,10 @@ export default function WelcomeScreen() {
   const [marketingOptIn, setMarketingOptIn] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isDemoLoading, setIsDemoLoading] = useState<boolean>(false);
+  const [isFirebaseSubmitting, setIsFirebaseSubmitting] = useState<boolean>(false);
+  const isFirebaseEnabled = isFirebaseAuthConfigured;
+  const isBackendAuthPending = signupMutation.isPending || signinMutation.isPending;
+  const isAuthPending = isBackendAuthPending || isFirebaseSubmitting;
   const fadeAnim = useMemo(() => new Animated.Value(0), []);
   const scaleAnim = useMemo(() => new Animated.Value(0.8), []);
   const logoPulse = useMemo(() => new Animated.Value(0), []);
@@ -153,38 +163,58 @@ export default function WelcomeScreen() {
     }
     
     try {
+      if (isFirebaseEnabled) {
+        setIsFirebaseSubmitting(true);
+      }
+
       if (activeTab === "signup") {
-        console.log('[Welcome] Attempting signup...');
-        const result = await signupMutation.mutateAsync({
-          email: email.trim(),
-          password,
-          name: name.trim(),
-        });
-        
-        console.log('[Welcome] Signup successful');
+        console.log("[Welcome] Attempting signup", { provider: isFirebaseEnabled ? "firebase" : "backend" });
+        const result = isFirebaseEnabled
+          ? await signUpWithFirebaseEmail({
+              email: email.trim(),
+              password,
+              name: name.trim(),
+            })
+          : await signupMutation.mutateAsync({
+              email: email.trim(),
+              password,
+              name: name.trim(),
+            });
+
+        console.log("[Welcome] Signup successful");
         await setAuth(result.token, result.user);
         await completeWelcome();
         router.replace("/onboarding" as any);
       } else {
-        console.log('[Welcome] Attempting signin...');
-        const result = await signinMutation.mutateAsync({
-          email: email.trim(),
-          password,
-        });
-        
-        console.log('[Welcome] Signin successful');
+        console.log("[Welcome] Attempting signin", { provider: isFirebaseEnabled ? "firebase" : "backend" });
+        const result = isFirebaseEnabled
+          ? await signInWithFirebaseEmail(email.trim(), password)
+          : await signinMutation.mutateAsync({
+              email: email.trim(),
+              password,
+            });
+
+        console.log("[Welcome] Signin successful");
         await setAuth(result.token, result.user);
         await completeWelcome();
         router.replace("/onboarding" as any);
       }
-    } catch (error: any) {
-      console.error('[Welcome] Auth error:', error);
-      const errorMessage = error?.message || 'Authentication failed. Please try again.';
+    } catch (error: unknown) {
+      console.error("[Welcome] Auth error", error);
+      const errorMessage = isFirebaseEnabled
+        ? normalizeFirebaseAuthError(error)
+        : typeof (error as { message?: string })?.message === "string"
+          ? (error as { message: string }).message
+          : "Authentication failed. Please try again.";
       
       if (Platform.OS === "web") {
         if (typeof window !== "undefined") window.alert(errorMessage);
       } else {
-        console.log('Auth error:', errorMessage);
+        console.log("Auth error:", errorMessage);
+      }
+    } finally {
+      if (isFirebaseEnabled) {
+        setIsFirebaseSubmitting(false);
       }
     }
   };
@@ -483,10 +513,10 @@ export default function WelcomeScreen() {
                 )}
 
                 <TouchableOpacity
-                  style={[styles.authButton, (activeTab === 'signup' && !agreeToTerms) || signupMutation.isPending || signinMutation.isPending ? styles.authButtonDisabled : undefined]}
+                  style={[styles.authButton, (activeTab === 'signup' && !agreeToTerms) || isAuthPending ? styles.authButtonDisabled : undefined]}
                   onPress={handleAuth}
                   activeOpacity={0.85}
-                  disabled={(activeTab === 'signup' && !agreeToTerms) || signupMutation.isPending || signinMutation.isPending}
+                  disabled={(activeTab === 'signup' && !agreeToTerms) || isAuthPending}
                 >
                   <LinearGradient
                     colors={[harmoniaColors.purple, harmoniaColors.violet]}
@@ -495,7 +525,7 @@ export default function WelcomeScreen() {
                     end={{ x: 1, y: 0.5 }}
                   >
                     <Text style={styles.authButtonText}>
-                      {signupMutation.isPending || signinMutation.isPending
+                      {isAuthPending
                         ? "Loading..."
                         : activeTab === "signin" 
                         ? "Sign In" 
@@ -515,10 +545,10 @@ export default function WelcomeScreen() {
                 )}
 
                 <TouchableOpacity
-                  style={[styles.demoButton, (isDemoLoading || signinMutation.isPending || signupMutation.isPending) && styles.authButtonDisabled]}
+                  style={[styles.demoButton, (isDemoLoading || isAuthPending) && styles.authButtonDisabled]}
                   onPress={handleDemoLogin}
                   activeOpacity={0.88}
-                  disabled={isDemoLoading || signinMutation.isPending || signupMutation.isPending}
+                  disabled={isDemoLoading || isAuthPending}
                   testID="demo-login-button"
                 >
                   <LinearGradient

@@ -15,11 +15,17 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Mail, ArrowLeft, CheckCircle } from "lucide-react-native";
+import {
+  isFirebaseAuthConfigured,
+  normalizeFirebaseAuthError,
+  sendFirebaseResetPasswordEmail,
+} from "@/lib/firebase";
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const fadeAnim = useMemo(() => new Animated.Value(0), []);
   const scaleAnim = useMemo(() => new Animated.Value(0.8), []);
 
@@ -39,7 +45,7 @@ export default function ResetPasswordScreen() {
     ]).start();
   }, [fadeAnim, scaleAnim]);
 
-  const handleResetPassword = () => {
+  const handleResetPassword = async () => {
     if (!email) {
       Alert.alert("Email Required", "Please enter your email address");
       return;
@@ -51,8 +57,22 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    console.log("Password reset requested for:", email);
-    setIsSubmitted(true);
+    if (!isFirebaseAuthConfigured) {
+      Alert.alert("Firebase Not Configured", "Add your Firebase env values to enable password reset emails.");
+      return;
+    }
+
+    try {
+      console.log("[ResetPassword] Sending Firebase reset email", email);
+      setIsSubmitting(true);
+      await sendFirebaseResetPasswordEmail(email.trim());
+      setIsSubmitted(true);
+    } catch (error: unknown) {
+      console.error("[ResetPassword] Reset email failed", error);
+      Alert.alert("Reset Failed", normalizeFirebaseAuthError(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleBackToSignIn = () => {
@@ -132,7 +152,7 @@ export default function ResetPasswordScreen() {
                       end={{ x: 1, y: 1 }}
                     >
                       <Text style={styles.submitButtonText}>
-                        Send Reset Link
+                        {isSubmitting ? "Sending..." : "Send Reset Link"}
                       </Text>
                     </LinearGradient>
                   </TouchableOpacity>

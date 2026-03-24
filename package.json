@@ -15,6 +15,7 @@
     "@hono/trpc-server": "^0.4.0",
     "@nkzw/create-context-hook": "^1.1.0",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@rork-ai/toolkit-sdk": "0.2.51",
     "@stardazed/streams-text-encoding": "^1.0.2",
     "@tanstack/eslint-plugin-query": "^5.91.2",
     "@tanstack/react-query": "^5.90.7",
@@ -47,6 +48,7 @@
     "expo-symbols": "~1.0.7",
     "expo-system-ui": "~6.0.8",
     "expo-web-browser": "^15.0.9",
+    "firebase": "^12.11.0",
     "hono": "^4.10.3",
     "jsonwebtoken": "^9.0.2",
     "lucide-react-native": "^0.475.0",
@@ -60,8 +62,7 @@
     "react-native-web": "^0.21.0",
     "superjson": "^2.2.3",
     "zod": "^4.1.12",
-    "zustand": "^5.0.2",
-    "@rork-ai/toolkit-sdk": "0.2.51"
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
