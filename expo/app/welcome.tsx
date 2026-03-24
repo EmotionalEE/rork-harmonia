@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -28,21 +28,12 @@ import { Image } from "expo-image";
 
 type AuthTab = "signin" | "signup";
 
-const DEMO_EMAIL = "test@example.com" as const;
-const DEMO_PASSWORD = "password123" as const;
-const DEMO_USER = {
-  id: "demo-user",
-  email: DEMO_EMAIL,
-  name: "Harmonia Explorer",
-};
-const DEMO_SIGNUP_NAME = "Harmonia Explorer" as const;
-const DEMO_TOKEN = "demo-token-local" as const;
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const { completeWelcome } = useUserProgress();
   const { setAuth } = useAuth();
-  
+
   const signupMutation = trpc.auth.signup.useMutation();
   const signinMutation = trpc.auth.signin.useMutation();
   const [activeTab, setActiveTab] = useState<AuthTab>("signin");
@@ -52,7 +43,6 @@ export default function WelcomeScreen() {
   const [agreeToTerms, setAgreeToTerms] = useState<boolean>(false);
   const [marketingOptIn, setMarketingOptIn] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [isDemoLoading, setIsDemoLoading] = useState<boolean>(false);
   const [isFirebaseSubmitting, setIsFirebaseSubmitting] = useState<boolean>(false);
   const isFirebaseEnabled = isFirebaseAuthConfigured;
   const isBackendAuthPending = signupMutation.isPending || signinMutation.isPending;
@@ -222,90 +212,6 @@ export default function WelcomeScreen() {
   const handleForgotPassword = () => {
     router.push("/reset-password" as any);
   };
-
-  const activateOfflineDemo = useCallback(async () => {
-    console.log('[Welcome] Using offline demo profile');
-    await setAuth(DEMO_TOKEN, DEMO_USER);
-    await completeWelcome();
-    router.replace("/onboarding" as any);
-  }, [setAuth, completeWelcome, router]);
-
-  const handleDemoLogin = useCallback(async () => {
-    if (signinMutation.isPending || signupMutation.isPending || isDemoLoading) {
-      return;
-    }
-
-    try {
-      console.log('[Welcome] Demo login start');
-      setIsDemoLoading(true);
-      setEmail(DEMO_EMAIL);
-      setPassword(DEMO_PASSWORD);
-
-      const result = await signinMutation.mutateAsync({
-        email: DEMO_EMAIL,
-        password: DEMO_PASSWORD,
-      });
-
-      await setAuth(result.token, result.user);
-      await completeWelcome();
-      router.replace("/onboarding" as any);
-    } catch (error: unknown) {
-      const message = typeof (error as { message?: string })?.message === "string" ? (error as { message: string }).message : "";
-      const normalized = message.toLowerCase();
-      const isNetworkIssue = normalized.includes("failed to fetch") || normalized.includes("network request failed");
-      const isBackendUnavailable = normalized.includes("json parse error") || normalized.includes("unexpected character");
-      const isInvalidCredentials = normalized.includes("invalid email or password") || normalized.includes("unauthorized");
-
-      if (isInvalidCredentials) {
-        try {
-          console.log('[Welcome] Demo user missing, creating demo account');
-          const signupResult = await signupMutation.mutateAsync({
-            email: DEMO_EMAIL,
-            password: DEMO_PASSWORD,
-            name: DEMO_SIGNUP_NAME,
-          });
-          await setAuth(signupResult.token, signupResult.user);
-          await completeWelcome();
-          router.replace("/onboarding" as any);
-          return;
-        } catch (signupError: unknown) {
-          const signupMessage = typeof (signupError as { message?: string })?.message === "string" ? (signupError as { message: string }).message : "";
-          const normalizedSignupError = signupMessage.toLowerCase();
-          const isAlreadyExists = normalizedSignupError.includes("already exists") || normalizedSignupError.includes("conflict");
-
-          if (isAlreadyExists) {
-            try {
-              console.log('[Welcome] Demo user exists, retrying signin');
-              const retryResult = await signinMutation.mutateAsync({
-                email: DEMO_EMAIL,
-                password: DEMO_PASSWORD,
-              });
-              await setAuth(retryResult.token, retryResult.user);
-              await completeWelcome();
-              router.replace("/onboarding" as any);
-              return;
-            } catch (retryError) {
-              console.error('[Welcome] Demo retry signin error:', retryError);
-            }
-          }
-
-          console.error('[Welcome] Demo signup error:', signupError);
-        }
-      }
-
-      if (isNetworkIssue || isBackendUnavailable) {
-        console.log('[Welcome] Demo login backend unavailable, using offline profile');
-        await activateOfflineDemo();
-        return;
-      }
-
-      console.error('[Welcome] Demo login error:', error);
-      console.log('[Welcome] Falling back to offline demo due to error');
-      await activateOfflineDemo();
-    } finally {
-      setIsDemoLoading(false);
-    }
-  }, [signinMutation, signupMutation, isDemoLoading, setAuth, completeWelcome, router, activateOfflineDemo]);
 
   return (
     <LinearGradient
@@ -544,27 +450,6 @@ export default function WelcomeScreen() {
                   </TouchableOpacity>
                 )}
 
-                <TouchableOpacity
-                  style={[styles.demoButton, (isDemoLoading || isAuthPending) && styles.authButtonDisabled]}
-                  onPress={handleDemoLogin}
-                  activeOpacity={0.88}
-                  disabled={isDemoLoading || isAuthPending}
-                  testID="demo-login-button"
-                >
-                  <LinearGradient
-                    colors={["rgba(255,255,255,0.15)", "rgba(255,255,255,0.05)"]}
-                    style={styles.demoButtonGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  >
-                    <Text style={styles.demoButtonTitle}>
-                      {isDemoLoading ? "Connecting to Demo..." : "Instant Demo Login"}
-                    </Text>
-                    <Text style={styles.demoButtonSubtitle}>
-                      Explore the experience without creating an account
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
               </View>
             </Animated.View>
           </ScrollView>
@@ -762,31 +647,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
-  demoButton: {
-    width: "100%",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.04)",
-  },
-  demoButtonGradient: {
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-  },
-  demoButtonTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700" as const,
-    textAlign: "center" as const,
-  },
-  demoButtonSubtitle: {
-    marginTop: 4,
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 13,
-    textAlign: "center" as const,
-  },
   eyeButton: {
     padding: 4,
     marginLeft: 8,
