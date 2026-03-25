@@ -7,19 +7,54 @@ function normalizeAudioUrl(rawUrl: string): string {
   try {
     const u = new URL(rawUrl);
 
-    if (u.hostname === "www.dropbox.com" || u.hostname === "dropbox.com") {
-      u.hostname = "dl.dropboxusercontent.com";
-      u.searchParams.delete("dl");
+    if (
+      u.hostname === "www.dropbox.com" ||
+      u.hostname === "dropbox.com" ||
+      u.hostname === "dl.dropboxusercontent.com"
+    ) {
+      u.searchParams.delete("st");
       if (!u.searchParams.has("raw")) {
         u.searchParams.set("raw", "1");
       }
-      u.searchParams.delete("st");
       return u.toString();
     }
 
     return rawUrl;
   } catch {
     return rawUrl;
+  }
+}
+
+function getAudioUrlCandidates(rawUrl: string): string[] {
+  const normalized = normalizeAudioUrl(rawUrl);
+
+  try {
+    const u = new URL(normalized);
+    const candidates = [normalized];
+    const isDropboxHost =
+      u.hostname === "www.dropbox.com" ||
+      u.hostname === "dropbox.com" ||
+      u.hostname === "dl.dropboxusercontent.com";
+
+    if (isDropboxHost) {
+      const alt = new URL(normalized);
+      alt.hostname =
+        u.hostname === "dl.dropboxusercontent.com"
+          ? "www.dropbox.com"
+          : "dl.dropboxusercontent.com";
+      if (!alt.searchParams.has("raw")) {
+        alt.searchParams.set("raw", "1");
+      }
+      alt.searchParams.delete("st");
+      const altUrl = alt.toString();
+      if (altUrl !== normalized) {
+        candidates.push(altUrl);
+      }
+    }
+
+    return candidates;
+  } catch {
+    return [rawUrl];
   }
 }
 
@@ -120,7 +155,8 @@ export const [AudioProvider, useAudio] = createContextHook<AudioContextType>(() 
   }, []);
 
   const preloadSound = useCallback(async (url: string) => {
-    const normalizedUrl = normalizeAudioUrl(url);
+    const urlCandidates = getAudioUrlCandidates(url);
+    const normalizedUrl = urlCandidates[0];
 
     try {
       if (Platform.OS === "web") {
@@ -140,7 +176,6 @@ export const [AudioProvider, useAudio] = createContextHook<AudioContextType>(() 
           a.src = normalizedUrl;
           a.loop = true;
           a.preload = "auto";
-          a.crossOrigin = "anonymous";
           a.volume = 1;
           a.load();
           webAudioRef.current = a;
@@ -162,19 +197,34 @@ export const [AudioProvider, useAudio] = createContextHook<AudioContextType>(() 
       await cleanupLoadedSound();
 
       console.log("[Audio] Preloading sound from:", normalizedUrl);
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: normalizedUrl },
-        {
-          shouldPlay: false,
-          isLooping: true,
-          volume: 1,
-          androidImplementation: "ExoPlayer",
+      let newSound: Audio.Sound | null = null;
+      let lastError: unknown = null;
+      for (const candidate of urlCandidates) {
+        try {
+          const result = await Audio.Sound.createAsync(
+            { uri: candidate },
+            {
+              shouldPlay: false,
+              isLooping: true,
+              volume: 1,
+              androidImplementation: "ExoPlayer",
+            }
+          );
+          newSound = result.sound;
+          currentUrlRef.current = candidate;
+          break;
+        } catch (candidateError) {
+          lastError = candidateError;
+          console.log("[Audio] Candidate preload failed:", candidate, candidateError);
         }
-      );
+      }
+
+      if (!newSound) {
+        throw lastError ?? new Error("Unable to preload audio from available URL candidates");
+      }
 
       soundRef.current = newSound;
       setSound(newSound);
-      currentUrlRef.current = normalizedUrl;
       attachStatusHandler(newSound);
     } catch (error) {
       console.error("[Audio] Error preloading sound:", error);
@@ -183,7 +233,8 @@ export const [AudioProvider, useAudio] = createContextHook<AudioContextType>(() 
   }, [attachStatusHandler, cleanupLoadedSound]);
 
   const playSound = useCallback(async (url: string) => {
-    const normalizedUrl = normalizeAudioUrl(url);
+    const urlCandidates = getAudioUrlCandidates(url);
+    const normalizedUrl = urlCandidates[0];
     try {
       if (Platform.OS === "web") {
         try {
@@ -228,19 +279,34 @@ export const [AudioProvider, useAudio] = createContextHook<AudioContextType>(() 
       await cleanupLoadedSound();
 
       console.log("[Audio] Loading+Playing sound from:", normalizedUrl);
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: normalizedUrl },
-        {
-          shouldPlay: true,
-          isLooping: true,
-          volume: 1,
-          androidImplementation: "ExoPlayer",
+      let newSound: Audio.Sound | null = null;
+      let lastError: unknown = null;
+      for (const candidate of urlCandidates) {
+        try {
+          const result = await Audio.Sound.createAsync(
+            { uri: candidate },
+            {
+              shouldPlay: true,
+              isLooping: true,
+              volume: 1,
+              androidImplementation: "ExoPlayer",
+            }
+          );
+          newSound = result.sound;
+          currentUrlRef.current = candidate;
+          break;
+        } catch (candidateError) {
+          lastError = candidateError;
+          console.log("[Audio] Candidate play failed:", candidate, candidateError);
         }
-      );
+      }
+
+      if (!newSound) {
+        throw lastError ?? new Error("Unable to play audio from available URL candidates");
+      }
 
       soundRef.current = newSound;
       setSound(newSound);
-      currentUrlRef.current = normalizedUrl;
       setIsPlaying(true);
       attachStatusHandler(newSound);
     } catch (error) {
